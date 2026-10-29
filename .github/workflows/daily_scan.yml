@@ -1,0 +1,35 @@
+name: daily-scan
+
+on:
+  schedule:
+    - cron: "10 0 * * *"   # UTC 00:10 = 한국시간 09:10
+  workflow_dispatch:        # 수동 실행 버튼용 (테스트할 때 사용)
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 설치
+        run: pip install pandas numpy requests
+
+      - name: 업비트 일봉 내려받기
+        run: python backtest_v64.py fetch --days 200
+
+      - name: 후보 찾고 디스코드로 보내기
+        run: python notify.py
+
+      - name: 실패하면 디스코드로 알리기
+        if: failure()
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d '{"content":"[오류] daily-scan 실행 실패. GitHub Actions 탭에서 로그를 확인하세요."}' \
+            "$DISCORD_WEBHOOK_URL"
