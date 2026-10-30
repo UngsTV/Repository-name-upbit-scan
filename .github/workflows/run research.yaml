@@ -1,0 +1,59 @@
+name: run-research
+
+# 수동 실행 전용 (Actions 탭 -> run-research -> Run workflow)
+on:
+  workflow_dispatch:
+    inputs:
+      study:
+        description: "실행할 연구 (trend_test / rebound_study / flow_study / gemini_rule_test)"
+        required: true
+        default: "trend_test"
+        type: choice
+        options:
+          - trend_test
+          - rebound_study
+          - flow_study
+          - gemini_rule_test
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      STUDY: ${{ github.event.inputs.study }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 설치
+        run: pip install pandas numpy requests scikit-learn
+
+      - name: 업비트 전체 일봉 내려받기 (20~40분 걸릴 수 있음)
+        run: python backtest_v64.py fetch --days 4000 --refresh
+
+      - name: 연구 실행
+        run: python "${STUDY}.py" 2>&1 | tee run_log.txt
+
+      - name: 결과 파일 목록
+        run: ls -la results_*.txt run_log.txt
+
+      - name: 결과를 Actions 보관함에 올리기
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-results
+          path: |
+            results_*.txt
+            run_log.txt
+          if-no-files-found: warn
+
+      - name: 결과 파일을 디스코드로 보내기
+        if: always()
+        run: |
+          for f in results_*.txt run_log.txt; do
+            [ -f "$f" ] && curl -s -F "content=연구 결과: $f ($STUDY)" -F "file=@$f" "$DISCORD_WEBHOOK_URL" > /dev/null
+          done
