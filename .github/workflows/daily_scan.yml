@@ -2,13 +2,15 @@ name: daily-scan
 
 on:
   schedule:
-    - cron: "10 0 * * *"   # UTC 00:10 = 한국시간 09:10
-  workflow_dispatch:        # 수동 실행 버튼용 (테스트할 때 사용)
+    # UTC 23:45 = 한국시간 08:45. 일부러 일찍 시작하고, 아래 '대기' 단계에서 09:01까지 기다렸다가 실행합니다.
+    # (GitHub 예약 실행은 자정 UTC 근처가 가장 붐벼서 수십 분 늦을 수 있기 때문)
+    - cron: "45 23 * * *"
+  workflow_dispatch:        # Actions 탭에서 수동 실행 버튼용 (수동 실행은 기다리지 않고 바로 실행)
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
@@ -20,6 +22,20 @@ jobs:
 
       - name: 패키지 설치
         run: pip install pandas numpy requests
+
+      - name: 한국시간 09:01까지 대기 (예약 실행일 때만)
+        if: github.event_name == 'schedule'
+        run: |
+          now=$(TZ=Asia/Seoul date +%s)
+          target=$(TZ=Asia/Seoul date -d "today 09:01" +%s)
+          wait=$((target - now))
+          if [ "$wait" -gt 0 ] && [ "$wait" -le 1500 ]; then
+            echo "09:01까지 ${wait}초 대기"
+            sleep "$wait"
+          else
+            echo "대기 없이 바로 실행 (09:01까지 남은 초: $wait, 음수면 이미 지남)"
+          fi
+          echo "실행 시작 시각(KST): $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S')"
 
       - name: 업비트 일봉 내려받기
         run: python backtest_v64.py fetch --days 200
