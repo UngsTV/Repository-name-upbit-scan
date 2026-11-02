@@ -1,0 +1,46 @@
+name: overlap-scan
+on:
+  schedule:
+    - cron: "20 0 * * *"   # 매일 09:20 KST
+  workflow_dispatch:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write   # 릴리스에 일봉 zip을 올리기 위해 필요
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas numpy requests scikit-learn
+      - name: 일봉 캐시 복원
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: upbit_daily
+          key: upbit-daily-${{ github.run_id }}
+          restore-keys: upbit-daily-
+      - name: 데이터 받기 (첫 실행은 전체, 이후는 최근만 이어붙이기)
+        run: |
+          if [ -d upbit_daily ] && [ "$(ls upbit_daily | wc -l)" -gt 50 ]; then
+            python backtest_v64.py fetch --days 4000 --update
+          else
+            python backtest_v64.py fetch --days 4000
+          fi
+      - name: 일봉 zip을 릴리스(data)에 덮어쓰기
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          zip -qr upbit_daily.zip upbit_daily
+          gh release view data >/dev/null 2>&1 || gh release create data --title "upbit_daily (매일 자동 갱신)" --notes "매일 갱신되는 업비트 KRW 일봉 CSV 모음"
+          gh release upload data upbit_daily.zip --clobber
+      - name: 겹치는 후보 알림
+        run: python overlap_notify.py --top 15 --min-count 5
+      - name: 실패 알림
+        if: failure()
+        run: |
+          curl -s -H "Content-Type: application/json" -d '{"content":"overlap-scan 실패: Actions 로그를 확인하세요"}' "$DISCORD_WEBHOOK_URL"
