@@ -40,6 +40,16 @@ jobs:
           gh release upload data upbit_daily.zip --clobber
       - name: 겹치는 후보 알림
         run: python overlap_notify.py --top 15 --min-count 5
+      - name: 스크리닝 1·2·3 알림 (교집합 ★표시, 같은 데이터 사용)
+        run: python screen_alert.py --data-dir upbit_daily
+      - name: 후보 사후 성적표 + 기록 저장
+        run: |
+          python evaluate_log.py --notify
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add candidates_log.csv candidate_report.txt screen_log.csv
+          git commit -m "후보 기록 갱신 $(date -u +%F)" || echo "변경 없음"
+          git push
       - name: 실패 알림
         if: failure()
         run: |
