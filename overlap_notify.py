@@ -91,6 +91,26 @@ def clean_v001(data_dir):
     return pd.DataFrame(rows, columns=["market", "n", "value"])
 
 
+LOG = "candidates_log.csv"
+
+
+def append_log(day, l1, l2, l3, both, path=LOG):
+    """오늘 후보를 누적 기록한다 (같은 신호일은 덮어쓰기)."""
+    p1, p2 = dict(zip(l1.market, l1.p)), dict(zip(l2.market, l2.p))
+    n8 = dict(zip(l3.market, l3.n))
+    rows = []
+    for m in sorted(set(p1) | set(p2) | set(n8)):
+        rows.append(dict(signal_date=day, market=m, l1=int(m in p1), l2=int(m in p2), l3=int(m in n8),
+                         overlap=int(m in both), p1=round(p1.get(m, np.nan), 4), p2=round(p2.get(m, np.nan), 4),
+                         n8=n8.get(m, np.nan)))
+    new = pd.DataFrame(rows)
+    if os.path.exists(path):
+        old = pd.read_csv(path, dtype={"signal_date": str})
+        old = old[old["signal_date"] != day]
+        new = pd.concat([old, new], ignore_index=True)
+    new.sort_values(["signal_date", "market"]).to_csv(path, index=False)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", default="upbit_daily")
@@ -119,8 +139,14 @@ def main():
     t3 = ", ".join(f"{nm(m)}({n}/8)" for m, n in zip(l3.market[:k], l3.n[:k]))
     L.append(f"3번 8지표 {a.min_count}개 이상 ({len(l3)}개): " + (t3 or "없음") + (" …" if len(l3) > k else ""))
     send("\n".join(L), a.dry)
-    ov = sorted(both)
-    send("겹치는 후보 >> " + (", ".join(nm(m) for m in ov) if ov else "없음") +
+    try:
+        append_log(day, l1, l2, l3, both)
+    except Exception:
+        print("log 기록 실패:", traceback.format_exc()[-500:])
+    p2 = dict(zip(l2.market, l2.p))
+    ov = sorted(both, key=lambda m: -p2.get(m, 0))   # 2번 확률 높은 순 = 매수 우선순위
+    send("겹치는 후보 (2번 확률 높은 순, 맨 앞이 1순위) >> " +
+         (", ".join(f"{i}) {nm(m)} {p2.get(m, 0):.0%}" for i, m in enumerate(ov, 1)) if ov else "없음") +
          f"\n(2개 겹침: 1&2 {len(s1 & s2)}개, 1&3 {len(s1 & s3)}개, 2&3 {len(s2 & s3)}개)", a.dry)
 
 
