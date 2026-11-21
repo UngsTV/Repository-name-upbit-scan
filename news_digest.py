@@ -154,7 +154,9 @@ def headline_digest(items, per_topic=4, others=5, with_src=True):
 
 
 def discord(text):
-    url = os.environ["DISCORD_WEBHOOK_URL"]
+    url = (os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("NEWS_DISCORD_WEBHOOK_URL") or "").strip()
+    if not url.startswith("https://"):
+        raise SystemExit("❌ 웹훅 URL이 비어 있음: news-digest.yml의 env 줄이 secrets.DISCORD_WEBHOOK_URL 로 저장(커밋)됐는지 확인")
     chunks, cur = [], ""
     for line in text.split("\n"):
         if len(cur) + len(line) + 1 > 1900:
