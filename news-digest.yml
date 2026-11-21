@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.NEWS_WEBHOOK || secrets.DISCORD_WEBHOOK_URL }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
       NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -20,5 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: 웹훅 값 확인 (값은 안 보이고 길이만 출력)
+        run: echo "웹훅 길이=${#DISCORD_WEBHOOK_URL}, NEWS_WEBHOOK 등록여부=${{ secrets.NEWS_WEBHOOK != '' }}"
       - run: pip install -r requirements.txt
       - run: python news_digest.py
