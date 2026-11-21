@@ -155,6 +155,7 @@ def headline_digest(items, per_topic=4, others=5, with_src=True):
 
 def discord(text):
     url = (os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("NEWS_DISCORD_WEBHOOK_URL") or "").strip()
+    print(f"[웹훅 진단] DISCORD_WEBHOOK_URL 길이={len(os.getenv('DISCORD_WEBHOOK_URL') or '')}, 앞 8글자={url[:8]!r}")
     if not url.startswith("https://"):
         raise SystemExit("❌ 웹훅 URL이 비어 있음: news-digest.yml의 env 줄이 secrets.DISCORD_WEBHOOK_URL 로 저장(커밋)됐는지 확인")
     chunks, cur = [], ""
