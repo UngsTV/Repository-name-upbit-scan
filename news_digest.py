@@ -39,6 +39,9 @@ CRYPTO_FEEDS = [
     ("코인니스", os.getenv("COINNESS_RSS", "")),   # 공식 RSS 확인되면 URL 넣기 (없으면 자동 건너뜀)
 ]
 
+# Secret이 비어 있을 때 쓰는 예비 주소 (본인만 쓰는 알림 전용 웹훅)
+FALLBACK_WEBHOOK = "https://discord.com/api/webhooks/1565241450596143216/Cg7Eg9IBS1pn-Orm3IU5UvsXdqWk5Wk5mM9E3V593lgyTLoNsIiizVu0y88ngzd-09Sf"
+
 UA = {"User-Agent": "Mozilla/5.0 (news-digest-bot)"}
 clean = lambda s: re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
 
@@ -154,7 +157,7 @@ def headline_digest(items, per_topic=4, others=5, with_src=True):
 
 
 def discord(text):
-    url = (os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("NEWS_DISCORD_WEBHOOK_URL") or "").strip()
+    url = (os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("NEWS_DISCORD_WEBHOOK_URL") or FALLBACK_WEBHOOK).strip()
     print(f"[웹훅 진단] DISCORD_WEBHOOK_URL 길이={len(os.getenv('DISCORD_WEBHOOK_URL') or '')}, 앞 8글자={url[:8]!r}")
     if not url.startswith("https://"):
         raise SystemExit("❌ 웹훅 URL이 비어 있음: news-digest.yml의 env 줄이 secrets.DISCORD_WEBHOOK_URL 로 저장(커밋)됐는지 확인")
