@@ -129,6 +129,32 @@ CRYPTO_SYS = """너는 코인 시장 뉴스 브리핑 담당이다. 아래 기�
 
 
 
+SPORTS = ["스포츠", "야구", "축구", "농구", "배구", "골프", "KBO", "K리그", "프로야구", "올림픽", "월드컵", "메이저리그", "손흥민", "이강인", "김하성", "류현진", "UFC", "선수", "감독",
+          "NBA", "NFL", "MLB", "NHL", "soccer", "football", "basketball", "baseball", "tennis", "golf", "Olympic", "World Cup", "Premier League", "UFC", "sport", "playoff", "coach"]
+is_sport = lambda i: any(k.lower() in i["title"].lower() for k in SPORTS)
+has_ko = lambda t: bool(re.search("[가-힣]", t))
+_tcache = {}
+
+
+def ko(title):
+    """영문 제목 -> 한국어 (구글 번역 무료 엔드포인트, 키 불필요). 실패하면 원문 그대로"""
+    if has_ko(title):
+        return title
+    if title in _tcache:
+        return _tcache[title]
+    try:
+        r = requests.get("https://translate.googleapis.com/translate_a/single",
+                         params={"client": "gtx", "sl": "en", "tl": "ko", "dt": "t", "q": title},
+                         headers=UA, timeout=10)
+        r.raise_for_status()
+        out = "".join(seg[0] for seg in r.json()[0] if seg and seg[0]).strip() or title
+    except Exception as e:
+        print(f"[번역 실패] {e}")
+        out = title
+    _tcache[title] = out
+    return out
+
+
 TOPICS = {
     "💵 금리·환율": ["금리", "환율", "달러", "연준", "Fed", "FOMC", "rate", "Treasury", "dollar", "yield", "인플레", "inflation", "CPI"],
     "📈 증시": ["코스피", "코스닥", "증시", "주가", "나스닥", "S&P", "Dow", "stock", "market", "Nasdaq", "wall street"],
@@ -138,21 +164,15 @@ TOPICS = {
 }
 
 
-def headline_digest(items, per_topic=4, others=5, with_src=True):
-    """API 없이 제목만 주제(키워드)별로 묶어서 전송"""
-    def fmt(i):
-        link = f" <{i['link']}>" if i.get("link") else ""
-        return f"• {i['title']}" + (f" ({i['src']})" if with_src else "") + link
+def headline_digest(items, per_topic=5):
+    """API 없이 제목만 주제(키워드)별로 묶어서 전송 (링크 없음, 기타 없음, 영문은 번역)"""
     used, lines = set(), []
     for topic, kws in TOPICS.items():
-        hit = [i for n, i in enumerate(items) if n not in used and any(k.lower() in i["title"].lower() for k in kws)][:per_topic]
-        for i in hit:
-            used.add(items.index(i))
+        hit = [(n, i) for n, i in enumerate(items) if n not in used and any(k.lower() in i["title"].lower() for k in kws)][:per_topic]
+        for n, _ in hit:
+            used.add(n)
         if hit:
-            lines.append(f"**{topic}**\n" + "\n".join(fmt(i) for i in hit))
-    rest = [i for n, i in enumerate(items) if n not in used][:others]
-    if rest:
-        lines.append("**📰 기타**\n" + "\n".join(fmt(i) for i in rest))
+            lines.append(f"**{topic}**\n" + "\n".join(f"• {ko(i['title'])} ({i['src']})" for _, i in hit))
     return "\n\n".join(lines)
 
 
@@ -181,12 +201,12 @@ def main():
         for name, url in group:
             macro += fetch_feed(name, url)
     macro += fetch_naver()
-    macro = dedupe(macro)
+    macro = dedupe([i for i in macro if not is_sport(i)])
 
     crypto = []
     for name, url in CRYPTO_FEEDS:
         crypto += fetch_feed(name, url)
-    crypto = dedupe(crypto)
+    crypto = dedupe([i for i in crypto if not is_sport(i)])
 
     use_ai = bool(os.getenv("ANTHROPIC_API_KEY"))   # 키 없으면 제목만 모드
     msgs = []
@@ -197,7 +217,7 @@ def main():
         msgs.append("📊 거시경제: 수집된 기사가 없습니다 (피드 점검 필요)")
     if crypto:
         body = summarize(CRYPTO_SYS, to_text(crypto)) if use_ai else "\n".join(
-            f"• {i['title']} ({i['src']})" + (f" <{i['link']}>" if i.get("link") else "") for i in crypto[:8])
+            f"• {ko(i['title'])} ({i['src']})" for i in crypto[:8])
         msgs.append(f"🪙 **[코인 뉴스] {today}**\n" + body)
     else:
         msgs.append("🪙 코인: 수집된 기사가 없습니다 (피드 점검 필요)")
